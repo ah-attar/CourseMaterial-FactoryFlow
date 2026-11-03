@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Dice Game — Theory of Constraints</title>
+<style>
+  /* ===== DESIGN TOKENS ===== */
+  :root {
+    --bg: #0f1115;
+    --card: #161a22;
+    --card-2: #1c2130;
+    --line: #262c3a;
+    --text: #e6e9f0;
+    --text-dim: #8b93a7;
+    --accent: #2dd4bf;
+    --accent-2: #38bdf8;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --green: #4ade80;
+    --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  h1 .sub {
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--text-dim);
+    letter-spacing: 0;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+
+  .card-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  /* ===== LAYOUT ===== */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .main-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .side-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  /* ===== CONTROLS ===== */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  button {
+    background: var(--card-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  button:hover:not(:disabled) {
+    background: #252b3b;
+    border-color: #3a4255;
+    transform: translateY(-1px);
+  }
+
+  button:active:not(:disabled) { transform: translateY(0); }
+
+  button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  button.primary {
+    background: var(--accent);
+    color: #04211d;
+    border-color: var(--accent);
+  }
+
+  button.primary:hover:not(:disabled) { background: #5eead4; border-color: #5eead4; }
+
+  button.warn {
+    background: transparent;
+    color: var(--amber);
+    border-color: var(--amber);
+  }
+
+  button.warn:hover:not(:disabled) { background: rgba(251, 191, 36, 0.1); }
+
+  .slider-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: var(--line);
+    border-radius: 2px;
+    outline: none;
+    width: 100px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+
+  .slider-val {
+    color: var(--text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    min-width: 22px;
+    text-align: right;
+  }
+
+  /* ===== PRODUCTION LINE ===== */
+  .line-scroll {
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+
+  .line-scroll::-webkit-scrollbar { height: 6px; }
+  .line-scroll::-webkit-scrollbar-track { background: transparent; }
+  .line-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+  .line {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: min-content;
+    padding: 4px 0;
+  }
+
+  .station-wrap {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .station {
+    background: var(--card-2);
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    width: 148px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+    position: relative;
+  }
+
+  .station.active {
+    border-color: var(--accent-2);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15), 0 0 20px rgba(56, 189, 248, 0.1);
+  }
+
+  .station.starved {
+    border-color: var(--amber);
+    background: rgba(251, 191, 36, 0.06);
+    animation: starvePulse 0.5s ease 2;
+  }
+
+  @keyframes starvePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+    50% { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.15); }
+  }
+
+  .station-name {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+  }
+
+  /* ===== 3D DICE ===== */
+  .dice-stage {
+    width: 56px;
+    height: 56px;
+    perspective: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dice {
+    width: 44px;
+    height: 44px;
+    position: relative;
+    transform-style: preserve-3d;
+    transform: rotateX(-20deg) rotateY(-25deg);
+    transition: transform 0.6s cubic-bezier(0.3, 1.4, 0.5, 1);
+  }
+
+  .dice.rolling {
+    animation: diceRoll 0.55s cubic-bezier(0.3, 0.8, 0.4, 1);
+  }
+
+  @keyframes diceRoll {
+    0%   { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
+    25%  { transform: rotateX(180deg) rotateY(180deg) rotateZ(90deg) scale(1.15); }
+    50%  { transform: rotateX(360deg) rotateY(360deg) rotateZ(180deg) scale(1.1); }
+    75%  { transform: rotateX(540deg) rotateY(540deg) rotateZ(270deg) scale(1.05); }
+    100% { transform: rotateX(720deg) rotateY(720deg) rotateZ(360deg) scale(1); }
+  }
+
+  .dice.settled {
+    transition: transform 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+  }
+
+  .face {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(145deg, #f8fafc, #cbd5e1);
+    border-radius: 7px;
+    border: 1px solid #94a3b8;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    padding: 5px;
+    gap: 2px;
+    backface-visibility: hidden;
+  }
+
+  .pip {
+    background: #1e293b;
+    border-radius: 50%;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* cube face transforms */
+  .face-1 { transform: translateZ(22px); }
+  .face-2 { transform: rotateY(90deg) translateZ(22px); }
+  .face-3 { transform: rotateY(180deg) translateZ(22px); }
+  .face-4 { transform: rotateY(-90deg) translateZ(22px); }
+  .face-5 { transform: rotateX(90deg) translateZ(22px); }
+  .face-6 { transform: rotateX(-90deg) translateZ(22px); }
+
+  /* face-1 = 1 pip (center) */
+  .face-1 .pip:nth-child(1) { grid-area: 2 / 2; }
+  .face-1 .pip:nth-child(n+2) { display: none; }
+
+  /* face-2 = 2 pips (diagonal) */
+  .face-2 .pip:nth-child(1) { grid-area: 1 / 1; }
+  .face-2 .pip:nth-child(2) { grid-area: 3 / 3; }
+  .face-2 .pip:nth-child(n+3) { display: none; }
+
+  /* face-3 = 3 pips */
+  .face-3 .pip:nth-child(1) { grid-area: 1 / 1; }
+  .face-3 .pip:nth-child(2) { grid-area: 2 / 2; }
+  .face-3 .pip:nth-child(3) { grid-area: 3 / 3; }
+  .face-3 .pip:nth-child(n+4) { display: none; }
+
+  /* face-4 = 4 pips */
+  .face-4 .pip:nth-child(1) { grid-area: 1 / 1; }
+  .face-4 .pip:nth-child(2) { grid-area: 1 / 3; }
+  .face-4 .pip:nth-child(3) { grid-area: 3 / 1; }
+  .face-4 .pip:nth-child(4) { grid-area: 3 / 3; }
+  .face-4 .pip:nth-child(n+5) { display: none; }
+
+  /* face-5 = 5 pips */
+  .face-5 .pip:nth-child(1) { grid-area: 1 / 1; }
+  .face-5 .pip:nth-child(2) { grid-area: 1 / 3; }
+  .face-5 .pip:nth-child(3) { grid-area: 2 / 2; }
+  .face-5 .pip:nth-child(4) { grid-area: 3 / 1; }
+  .face-5 .pip:nth-child(5) { grid-area: 3 / 3; }
+  .face-5 .pip:nth-child(n+6) { display: none; }
+
+  /* face-6 = 6 pips */
+  .face-6 .pip:nth-child(1) { grid-area: 1 / 1; }
+  .face-6 .pip:nth-child(2) { grid-area: 1 / 3; }
+  .face-6 .pip:nth-child(3) { grid-area: 2 / 1; }
+  .face-6 .pip:nth-child(4) { grid-area: 2 / 3; }
+  .face-6 .pip:nth-child(5) { grid-area: 3 / 1; }
+  .face-6 .pip:nth-child(6) { grid-area: 3 / 3; }
+
+  .roll-result {
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .roll-result .num { color: var(--accent); font-size: 1rem; }
+  .roll-result .moved { color: var(--green); }
+  .roll-result .starved-tag { color: var(--amber); font-size: 0.65rem; }
+
+  /* ===== BUFFER VISUAL ===== */
+  .buffer {
+    width: 100%;
+    min-height: 34px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    padding: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    align-content: flex-start;
+    position: relative;
+    border: 1px solid transparent;
+    transition: border-color 0.3s;
+  }
+
+  .buffer.overflow { border-color: rgba(251, 191, 36, 0.4); }
+
+  .unit {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--accent-2);
+    box-shadow: 0 0 4px rgba(56, 189, 248, 0.5);
+    animation: unitPop 0.3s cubic-bezier(0.2, 1.5, 0.4, 1);
+  }
+
+  .unit.shipped { background: var(--green); box-shadow: 0 0 4px rgba(74, 222, 128, 0.5); }
+
+  @keyframes unitPop {
+    0% { transform: scale(0) rotate(-90deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+
+  .buffer-count {
+    position: absolute;
+    right: 5px;
+    bottom: 3px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    background: rgba(15, 17, 21, 0.85);
+    padding: 0 3px;
+    border-radius: 3px;
+    pointer-events: none;
+  }
+
+  .buffer-label {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .station-stats {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* arrows between stations */
+  .arrow {
+    width: 28px;
+    height: 2px;
+    background: var(--line);
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+
+  .arrow::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -3px;
+    border-left: 6px solid var(--line);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: border-left-color 0.3s;
+  }
+
+  .arrow.flowing { background: var(--accent-2); }
+  .arrow.flowing::after { border-left-color: var(--accent-2); }
+
+  /* flying unit animation */
+  .flyer {
+    position: fixed;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--accent-2);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.9);
+    pointer-events: none;
+    z-index: 999;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s;
+  }
+
+  .flyer.shipped { background: var(--green); box-shadow: 0 0 8px rgba(74, 222, 128, 0.9); }
+
+  /* ===== SIDE PANEL ===== */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(38, 44, 58, 0.6);
+    font-size: 0.8rem;
+  }
+
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: var(--text-dim); }
+  .stat-row .value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-row .value.accent { color: var(--accent); }
+  .stat-row .value.red { color: var(--red); }
+  .stat-row .value.green { color: var(--green); }
+  .stat-row .value.amber { color: var(--amber); }
+
+  /* ===== CHART ===== */
+  .chart-wrap {
+    position: relative;
+    width: 100%;
+    height: 180px;
+  }
+
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-swatch { width: 14px; height: 2px; border-radius: 1px; }
+  .legend-swatch.dashed {
+    height: 0;
+    border-top: 2px dashed currentColor;
+  }
+
+  /* ===== INSIGHT BOX ===== */
+  .insight {
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.08), rgba(56, 189, 248, 0.05));
+    border: 1px solid rgba(45, 212, 191, 0.25);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .insight strong { color: var(--accent); }
+  .insight .highlight { color: var(--amber); font-weight: 700; }
+
+  /* ===== ROUND LOG ===== */
+  .log {
+    max-height: 180px;
+    overflow-y: auto;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    line-height: 1.7;
+    color: var(--text-dim);
+  }
+
+  .log-entry { padding: 3px 0; border-bottom: 1px solid rgba(38, 44, 58, 0.4); }
+  .log-entry .round-num { color: var(--accent-2); font-weight: 700; }
+  .log-entry .shipped-num { color: var(--green); font-weight: 700; }
+  .log-entry .starved-num { color: var(--amber); }
+
+  .log::-webkit-scrollbar { width: 5px; }
+  .log::-webkit-scrollbar-track { background: transparent; }
+  .log::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+  /* ===== BOTTOM BAR ===== */
+  .bottom-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .badge.normal { background: rgba(139, 147, 167, 0.15); color: var(--text-dim); }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 600px) {
+    body { padding: 12px; gap: 12px; }
+    h1 { font-size: 1.15rem; }
+    h1 .sub { display: none; }
+    .card { padding: 12px; }
+    .station { width: 124px; padding: 8px; }
+    .dice-stage { width: 48px; height: 48px; }
+    .dice, .face { width: 38px; height: 38px; }
+    .face-1 { transform: translateZ(19px); }
+    .face-2 { transform: rotateY(90deg) translateZ(19px); }
+    .face-3 { transform: rotateY(180deg) translateZ(19px); }
+    .face-4 { transform: rotateY(-90deg) translateZ(19px); }
+    .face-5 { transform: rotateX(90deg) translateZ(19px); }
+    .face-6 { transform: rotateX(-90deg) translateZ(19px); }
+    .arrow { width: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>
+  🎲 The Dice Game
+  <span class="sub">Theory of Constraints — Dependent Events &amp; Statistical Fluctuations</span>
+</h1>
+
+<!-- ===== CONTROLS ===== -->
+<div class="card">
+  <div class="controls">
+    <button id="btnStep" class="primary">▶ Roll One Round</button>
+    <button id="btnPlay">⏩ Auto-Play</button>
+    <button id="btnFast">⚡ Run 100 Rounds</button>
+    <button id="btnReset" class="warn">↺ Reset</button>
+    <div class="slider-group">
+      <label for="stationCount">Stations</label>
+      <input type="range" id="stationCount" min="3" max="8" value="4">
+      <span class="slider-val" id="stationCountVal">4</span>
+    </div>
+    <div class="slider-group">
+      <label for="bufferSize">Start Buffer</label>
+      <input type="range" id="bufferSize" min="0" max="10" value="0">
+      <span class="slider-val" id="bufferSizeVal">0</span>
+    </div>
+    <div class="slider-group">
+      <label for="speed">Speed</label>
+      <input type="range" id="speed" min="1" max="10" value="5">
+      <span class="slider-val" id="speedVal">5</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MAIN LAYOUT ===== -->
+<div class="layout">
+
+  <!-- LEFT: production line + chart -->
+  <div class="main-col">
+
+    <!-- PRODUCTION LINE -->
+    <div class="card">
+      <div class="card-title">Production Line — Round <span id="roundDisplay" style="color:var(--accent-2)">0</span></div>
+      <div class="line-scroll">
+        <div class="line" id="line"></div>
+      </div>
+    </div>
+
+    <!-- CHART -->
+    <div class="card">
+      <div class="card-title">Cumulative Throughput</div>
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+      </div>
+      <div class="legend">
+        <div class="legend-item">
+          <span class="legend-swatch" style="background:var(--green)"></span>
+          Actual shipped
+        </div>
+        <div class="legend-item" style="color:var(--text-dim)">
+          <span class="legend-swatch dashed" style="color:var(--text-dim)"></span>
+          Theoretical max (round × 3.5)
+        </div>
+      </div>
+    </div>
+
+    <!-- INSIGHT -->
+    <div class="insight" id="insight">
+      <strong>Run the simulation to see the effect.</strong><br>
+      Balanced capacity is not balanced flow. Variance + dependency = throughput loss that accumulates downstream.
+    </div>
+
+  </div>
+
+  <!-- RIGHT: stats + log -->
+  <div class="side-col">
+
+    <div class="card">
+      <div class="card-title">Statistics</div>
+      <div class="stat-row">
+        <span class="label">Total shipped</span>
+        <span class="value green" id="statShipped">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="label">Rounds played</span>
+        <span class="value" id="statRounds">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="label">Avg per round</span>
+        <span class="value accent" id="statAvg">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="label">% of theoretical</span>
+        <span class="value" id="statPct">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="label">Idle rounds (total)</span>
+        <span class="value amber" id="statIdle">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="label">WIP in system</span>
+        <span class="value" id="statWip">0</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Per-Station Average Output</div>
+      <div id="stationBars"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Round Log</div>
+      <div class="log" id="log"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== BOTTOM BAR ===== -->
+<div class="bottom-bar">
+    <div id="modeLabel"><span class="badge normal">Balanced plant — 6-sided dice</span></div>
+    <div>© 2026 Created by AMIC, Queen's University Belfast</div>
+    <div>Adopted from Goldratt's <em>The Goal</em></div>
+</div>
+
+<script>
+/* =========================================================================
+   THE DICE GAME — Theory of Constraints
+   =========================================================================
+   Rules:
+   - N stations in series, each with a fair 6-sided die.
+   - Station 1 draws from an infinite raw-material supply.
+   - Each round, stations process in order 1..N.
+   - Station i rolls its die -> R. It may move UP TO R units from its
+     input buffer to its output buffer.
+   - If fewer than R are available, it moves only what's there.
+     Idle capacity is lost forever (never recovered).
+   - The last station's output leaves the system as "shipped".
+   - Units are indistinguishable. No backflow, no borrowing.
+   ========================================================================= */
+
+// ---------- CONSTANTS ----------
+const DIE_SIDES = 6;
+const MEAN_ROLL = 3.5; // mean of a fair 6-sided die
+const MIN_STATIONS = 3;
+
+// ---------- STATE ----------
+const state = {
+  numStations: 4,
+  startBuffer: 0,
+  speed: 5,
+  round: 0,
+  stations: [],
+  totalShipped: 0,
+  totalIdle: 0,
+  shippedHistory: [],
+  isRunning: false,
+  isAnimating: false,
+  playTimer: null,
+};
+
+// ---------- DOM REFS ----------
+const $ = (id) => document.getElementById(id);
+const el = {
+  line: $('line'),
+  roundDisplay: $('roundDisplay'),
+  btnStep: $('btnStep'),
+  btnPlay: $('btnPlay'),
+  btnFast: $('btnFast'),
+  btnReset: $('btnReset'),
+  stationCount: $('stationCount'),
+  stationCountVal: $('stationCountVal'),
+  bufferSize: $('bufferSize'),
+  bufferSizeVal: $('bufferSizeVal'),
+  speed: $('speed'),
+  speedVal: $('speedVal'),
+  statShipped: $('statShipped'),
+  statRounds: $('statRounds'),
+  statAvg: $('statAvg'),
+  statPct: $('statPct'),
+  statIdle: $('statIdle'),
+  statWip: $('statWip'),
+  stationBars: $('stationBars'),
+  log: $('log'),
+  chart: $('chart'),
+  insight: $('insight'),
+};
+
+// =========================================================================
+// STATE INITIALISATION
+// =========================================================================
+
+function initState() {
+  state.round = 0;
+  state.totalShipped = 0;
+  state.totalIdle = 0;
+  state.shippedHistory = [0];
+  state.isRunning = false;
+  state.isAnimating = false;
+  clearTimeout(state.playTimer);
+
+  state.stations = [];
+  for (let i = 0; i < state.numStations; i++) {
+    state.stations.push({
+      id: i,
+      name: 'Station ' + (i + 1),
+      dieSides: DIE_SIDES,
+      outBuffer: state.startBuffer,
+      lastRoll: null,
+      lastMoved: null,
+      starved: false,
+      idleRounds: 0,
+      totalMoved: 0,
+      rollsSum: 0,
+      movedSum: 0,
+    });
+  }
+}
+
+// =========================================================================
+// RULES ENGINE
+// =========================================================================
+
+function rollDie(sides) {
+  if (window.crypto && window.crypto.getRandomValues) {
+    const buf = new Uint32Array(1);
+    const limit = Math.floor(0xFFFFFFFF / sides) * sides;
+    let val;
+    do {
+      window.crypto.getRandomValues(buf);
+      val = buf[0];
+    } while (val >= limit);
+    return (val % sides) + 1;
+  }
+  return Math.floor(Math.random() * sides) + 1;
+}
+
+function playRound() {
+  const results = [];
+  const n = state.stations.length;
+
+  for (let i = 0; i < n; i++) {
+    const st = state.stations[i];
+    const roll = rollDie(st.dieSides);
+
+    const inputAvailable = (i === 0) ? Infinity : state.stations[i - 1].outBuffer;
+
+    let moved;
+    let starved = false;
+
+    if (inputAvailable === Infinity) {
+      moved = roll;
+    } else if (inputAvailable < roll) {
+      moved = inputAvailable;
+      starved = true;
+    } else {
+      moved = roll;
+    }
+
+    if (i > 0) {
+      state.stations[i - 1].outBuffer -= moved;
+    }
+    st.outBuffer += moved;
+
+    st.lastRoll = roll;
+    st.lastMoved = moved;
+    st.starved = starved;
+    st.totalMoved += moved;
+    st.rollsSum += roll;
+    st.movedSum += moved;
+    if (starved) {
+      st.idleRounds++;
+      state.totalIdle++;
+    }
+
+    results.push({
+      stationIndex: i,
+      roll,
+      moved,
+      starved,
+      inputBefore: inputAvailable === Infinity ? null : inputAvailable,
+    });
+  }
+
+  // Last station ships its output
+  const last = state.stations[n - 1];
+  const shipped = last.outBuffer;
+  state.totalShipped += shipped;
+  last.outBuffer = 0;
+
+  state.shippedHistory.push(state.totalShipped);
+  state.round++;
+
+  return { results, shipped };
+}
+
+// =========================================================================
+// RENDERING — PRODUCTION LINE
+// =========================================================================
+
+function buildLine() {
+  el.line.innerHTML = '';
+  const n = state.stations.length;
+
+  // Raw material source
+  const source = document.createElement('div');
+  source.className = 'station-wrap';
+  source.innerHTML = `
+    <div class="station" style="border-style:dashed;opacity:0.8;">
+      <div class="station-name">Raw Material</div>
+      <div style="font-size:1.6rem;line-height:56px;">∞</div>
+      <div class="roll-result"></div>
+      <div class="buffer-label">Infinite supply</div>
+    </div>
+    <div class="arrow" data-arrow="0"></div>
+  `;
+  el.line.appendChild(source);
+
+  // Stations
+  for (let i = 0; i < n; i++) {
+    const st = state.stations[i];
+    const wrap = document.createElement('div');
+    wrap.className = 'station-wrap';
+
+    const stationDiv = document.createElement('div');
+    stationDiv.className = 'station';
+    stationDiv.id = 'station-' + i;
+    stationDiv.innerHTML = `
+      <div class="station-name">${st.name}</div>
+      <div class="dice-stage">
+        <div class="dice" id="dice-${i}">
+          <div class="face face-1">${'<div class="pip"></div>'.repeat(1)}</div>
+          <div class="face face-2">${'<div class="pip"></div>'.repeat(2)}</div>
+          <div class="face face-3">${'<div class="pip"></div>'.repeat(3)}</div>
+          <div class="face face-4">${'<div class="pip"></div>'.repeat(4)}</div>
+          <div class="face face-5">${'<div class="pip"></div>'.repeat(5)}</div>
+          <div class="face face-6">${'<div class="pip"></div>'.repeat(6)}</div>
+        </div>
+      </div>
+      <div class="roll-result" id="result-${i}"></div>
+      <div class="buffer-label">Out buffer</div>
+      <div class="buffer" id="buffer-${i}">
+        <div class="buffer-count" id="count-${i}">0</div>
+      </div>
+      <div class="station-stats">
+        <span>idle <span id="idle-${i}">0</span></span>
+        <span>avg <span id="avg-${i}">—</span></span>
+      </div>
+    `;
+    wrap.appendChild(stationDiv);
+
+    const arrow = document.createElement('div');
+    arrow.className = 'arrow';
+    arrow.dataset.arrow = i + 1;
+    wrap.appendChild(arrow);
+
+    el.line.appendChild(wrap);
+  }
+
+  // Shipping / finished goods
+  const ship = document.createElement('div');
+  ship.className = 'station-wrap';
+  ship.innerHTML = `
+    <div class="station" style="border-color:rgba(74,222,128,0.4);">
+      <div class="station-name" style="color:var(--green)">Shipped</div>
+      <div style="font-size:1.6rem;line-height:56px;color:var(--green);">🚚</div>
+      <div class="roll-result"><span class="num" id="ship-count" style="color:var(--green)">0</span></div>
+      <div class="buffer-label">Finished goods</div>
+    </div>
+  `;
+  el.line.appendChild(ship);
+}
+
+function renderBuffers() {
+  state.stations.forEach((st, i) => {
+    const buf = $('buffer-' + i);
+    if (!buf) return;
+    const countEl = $('count-' + i);
+    const existingUnits = buf.querySelectorAll('.unit');
+    const target = Math.min(st.outBuffer, 60);
+
+    if (existingUnits.length < target) {
+      const toAdd = target - existingUnits.length;
+      for (let k = 0; k < toAdd; k++) {
+        const u = document.createElement('div');
+        u.className = 'unit';
+        buf.insertBefore(u, countEl);
+      }
+    } else if (existingUnits.length > target) {
+      const toRemove = existingUnits.length - target;
+      for (let k = 0; k < toRemove; k++) {
+        existingUnits[k].remove();
+      }
+    }
+
+    if (countEl) countEl.textContent = st.outBuffer;
+    buf.classList.toggle('overflow', st.outBuffer > 30);
+  });
+
+  const shipEl = $('ship-count');
+  if (shipEl) shipEl.textContent = state.totalShipped;
+}
+
+function renderStationStats() {
+  state.stations.forEach((st, i) => {
+    const idleEl = $('idle-' + i);
+    const avgEl = $('avg-' + i);
+    if (idleEl) idleEl.textContent = st.idleRounds;
+    if (avgEl) avgEl.textContent = state.round > 0 ? (st.movedSum / state.round).toFixed(2) : '—';
+  });
+}
+
+function renderStats() {
+  el.roundDisplay.textContent = state.round;
+  el.statShipped.textContent = state.totalShipped;
+  el.statRounds.textContent = state.round;
+  el.statIdle.textContent = state.totalIdle;
+
+  const avg = state.round > 0 ? state.totalShipped / state.round : 0;
+  el.statAvg.textContent = state.round > 0 ? avg.toFixed(2) : '—';
+
+  const theoretical = state.round * MEAN_ROLL;
+  const pct = theoretical > 0 ? (state.totalShipped / theoretical) * 100 : 0;
+  el.statPct.textContent = state.round > 0 ? pct.toFixed(1) + '%' : '—';
+  el.statPct.className = 'value ' + (pct >= 90 ? 'green' : pct >= 70 ? 'amber' : 'red');
+
+  let wip = 0;
+  state.stations.forEach(st => wip += st.outBuffer);
+  el.statWip.textContent = wip;
+}
+
+function renderStationBars() {
+  const maxAvg = Math.max(MEAN_ROLL, ...state.stations.map(s => s.movedSum / Math.max(state.round, 1)));
+  let html = '';
+  state.stations.forEach((st) => {
+    const avg = state.round > 0 ? st.movedSum / state.round : 0;
+    const pct = maxAvg > 0 ? (avg / maxAvg) * 100 : 0;
+    html += `
+      <div style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);margin-bottom:3px;">
+          <span>${st.name}</span>
+          <span style="font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;">${avg.toFixed(2)}</span>
+        </div>
+        <div style="height:6px;background:var(--line);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:var(--accent-2);border-radius:3px;transition:width 0.4s ease;"></div>
+        </div>
+      </div>
+    `;
+  });
+  el.stationBars.innerHTML = html;
+}
+
+// =========================================================================
+// DICE ANIMATION
+// =========================================================================
+
+const FACE_ROTATIONS = {
+  1: { x: 0,   y: 0 },
+  2: { x: 0,   y: -90 },
+  3: { x: 0,   y: 180 },
+  4: { x: 0,   y: 90 },
+  5: { x: -90, y: 0 },
+  6: { x: 90,  y: 0 },
+};
+
+function animateDice(stationIndex, value, duration) {
+  return new Promise((resolve) => {
+    const dice = $('dice-' + stationIndex);
+    if (!dice) { resolve(); return; }
+
+    dice.classList.remove('settled');
+    dice.classList.remove('rolling');
+    void dice.offsetWidth;
+    dice.classList.add('rolling');
+
+    const startTime = performance.now();
+    const tickInterval = 70;
+    let lastTick = 0;
+
+    function tick(now) {
+      const elapsed = now - startTime;
+      if (elapsed >= duration) {
+        const rot = FACE_ROTATIONS[value];
+        dice.classList.remove('rolling');
+        dice.classList.add('settled');
+        dice.style.transform = `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`;
+        resolve();
+        return;
+      }
+      if (now - lastTick > tickInterval) {
+        lastTick = now;
+        const rnd = Math.floor(Math.random() * 6) + 1;
+        const r = FACE_ROTATIONS[rnd];
+        dice.style.transform = `rotateX(${r.x + 360}deg) rotateY(${r.y + 360}deg)`;
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+// =========================================================================
+// FLYING UNIT ANIMATION
+// =========================================================================
+
+function flyUnits(fromEl, toEl, count, isShipped) {
+  if (count <= 0 || !fromEl || !toEl) return;
+  const visualCount = Math.min(count, 8);
+  const fromRect = fromEl.getBoundingClientRect();
+  const toRect = toEl.getBoundingClientRect();
+
+  for (let i = 0; i < visualCount; i++) {
+    const flyer = document.createElement('div');
+    flyer.className = 'flyer' + (isShipped ? ' shipped' : '');
+    const jitter = (i - visualCount / 2) * 3;
+    flyer.style.left = (fromRect.left + fromRect.width / 2 - 5 + jitter) + 'px';
+    flyer.style.top = (fromRect.top + fromRect.height / 2 - 5) + 'px';
+    document.body.appendChild(flyer);
+
+    const dx = (toRect.left + toRect.width / 2) - (fromRect.left + fromRect.width / 2);
+    const dy = (toRect.top + toRect.height / 2) - (fromRect.top + fromRect.height / 2);
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        flyer.style.transform = `translate(${dx}px, ${dy}px) scale(0.6)`;
+        flyer.style.opacity = '0.2';
+      }, i * 25);
+    });
+
+    setTimeout(() => flyer.remove(), 500 + i * 25);
+  }
+}
+
+// =========================================================================
+// MAIN ANIMATED ROUND
+// =========================================================================
+
+async function runAnimatedRound() {
+  if (state.isAnimating) return;
+  state.isAnimating = true;
+  setButtonsDisabled(true);
+
+  const { results, shipped } = playRound();
+  const speedFactor = 11 - state.speed;
+  const rollDuration = 320 + speedFactor * 40;
+  const gapBetweenStations = 80 + speedFactor * 30;
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const stationEl = $('station-' + i);
+    const resultEl = $('result-' + i);
+    const arrow = document.querySelector(`.arrow[data-arrow="${i + 1}"]`);
+
+    if (stationEl) stationEl.classList.add('active');
+
+    await animateDice(i, r.roll, rollDuration);
+
+    if (resultEl) {
+      resultEl.innerHTML = r.starved
+        ? `<span class="num">${r.roll}</span> <span class="starved-tag">→ ${r.moved} (starved)</span>`
+        : `<span class="num">${r.roll}</span> <span class="moved">→ ${r.moved}</span>`;
+    }
+
+    if (r.starved && stationEl) {
+      stationEl.classList.add('starved');
+      setTimeout(() => stationEl.classList.remove('starved'), 900);
+    }
+
+    const sourceEl = i === 0
+      ? document.querySelector('.station')
+      : $('buffer-' + (i - 1));
+    const targetEl = $('buffer-' + i);
+    if (r.moved > 0) {
+      flyUnits(sourceEl, targetEl, r.moved, false);
+      if (arrow) {
+        arrow.classList.add('flowing');
+        setTimeout(() => arrow.classList.remove('flowing'), 400);
+      }
+    }
+
+    setTimeout(() => {
+      renderBuffers();
+      renderStationStats();
+    }, 180);
+
+    await sleep(gapBetweenStations);
+
+    if (stationEl) stationEl.classList.remove('active');
+  }
+
+  const n = state.stations.length;
+  const lastStationEl = $('station-' + (n - 1));
+  if (shipped > 0 && lastStationEl) {
+    const allStations = document.querySelectorAll('.station');
+    const shipEl = allStations[allStations.length - 1];
+    flyUnits($('buffer-' + (n - 1)) || lastStationEl, shipEl, shipped, true);
+  }
+
+  setTimeout(() => {
+    renderBuffers();
+    renderStats();
+    renderStationBars();
+    drawChart();
+    addLogEntry(results, shipped);
+    updateInsight();
+  }, 300);
+
+  await sleep(250);
+  state.isAnimating = false;
+  setButtonsDisabled(false);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// =========================================================================
+// FAST SIMULATION
+// =========================================================================
+
+function runFastRounds(count) {
+  for (let i = 0; i < count; i++) {
+    playRound();
+  }
+  renderBuffers();
+  renderStats();
+  renderStationStats();
+  renderStationBars();
+  drawChart();
+  updateInsight();
+  addLogEntry(null, state.totalShipped, true);
+}
+
+// =========================================================================
+// CHART
+// =========================================================================
+
+function drawChart() {
+  const canvas = el.chart;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const W = rect.width;
+  const H = rect.height;
+  const pad = { top: 12, right: 12, bottom: 24, left: 36 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const data = state.shippedHistory;
+  const maxRounds = Math.max(data.length - 1, 10);
+  const maxVal = Math.max(state.round * MEAN_ROLL, ...data, 10) * 1.1;
+
+  ctx.strokeStyle = 'rgba(38, 44, 58, 0.6)';
+  ctx.lineWidth = 1;
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.fillStyle = '#8b93a7';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+
+  const ySteps = 4;
+  for (let i = 0; i <= ySteps; i++) {
+    const y = pad.top + (plotH / ySteps) * i;
+    const val = maxVal * (1 - i / ySteps);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(W - pad.right, y);
+    ctx.stroke();
+    ctx.fillText(Math.round(val), pad.left - 6, y);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const xSteps = Math.min(6, maxRounds);
+  for (let i = 0; i <= xSteps; i++) {
+    const x = pad.left + (plotW / xSteps) * i;
+    const r = Math.round((maxRounds / xSteps) * i);
+    ctx.fillText(r, x, H - pad.bottom + 6);
+  }
+
+  const toX = (round) => pad.left + (round / maxRounds) * plotW;
+  const toY = (val) => pad.top + plotH - (val / maxVal) * plotH;
+
+  // Theoretical
+  ctx.strokeStyle = '#8b93a7';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(0));
+  ctx.lineTo(toX(state.round), toY(state.round * MEAN_ROLL));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Actual shipped
+  if (data.length > 1) {
+    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+    grad.addColorStop(0, 'rgba(74, 222, 128, 0.25)');
+    grad.addColorStop(1, 'rgba(74, 222, 128, 0.02)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(toX(0), toY(0));
+    data.forEach((v, i) => ctx.lineTo(toX(i), toY(v)));
+    ctx.lineTo(toX(data.length - 1), pad.top + plotH);
+    ctx.lineTo(toX(0), pad.top + plotH);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    data.forEach((v, i) => {
+      const x = toX(i);
+      const y = toY(v);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    const lastX = toX(data.length - 1);
+    const lastY = toY(data[data.length - 1]);
+    ctx.fillStyle = '#4ade80';
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0f1115';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+// =========================================================================
+// LOG
+// =========================================================================
+
+function addLogEntry(results, shipped, isSummary) {
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+
+  if (isSummary) {
+    entry.innerHTML = `<span class="round-num">FAST</span> total shipped <span class="shipped-num">${shipped}</span> over ${state.round} rounds`;
+  } else {
+    const rolls = results.map(r => r.starved ? `<span class="starved-num">${r.roll}→${r.moved}</span>` : `${r.roll}→${r.moved}`).join(' ');
+    entry.innerHTML = `<span class="round-num">R${state.round}</span> [${rolls}] shipped <span class="shipped-num">${shipped}</span>`;
+  }
+
+  el.log.insertBefore(entry, el.log.firstChild);
+
+  while (el.log.children.length > 60) {
+    el.log.removeChild(el.log.lastChild);
+  }
+}
+
+// =========================================================================
+// INSIGHT BOX
+// =========================================================================
+
+function updateInsight() {
+  if (state.round < 3) {
+    el.insight.innerHTML = `<strong>Keep rolling…</strong> Watch how small random fluctuations at each station compound as they travel down the line.`;
+    return;
+  }
+
+  const theoretical = state.round * MEAN_ROLL;
+  const actual = state.totalShipped;
+  const loss = theoretical - actual;
+  const pct = (actual / theoretical) * 100;
+
+  let worst = state.stations[0];
+  let worstAvg = Infinity;
+  state.stations.forEach(st => {
+    const avg = st.movedSum / state.round;
+    if (avg < worstAvg) { worstAvg = avg; worst = st; }
+  });
+
+  let html = `<strong>Throughput: ${actual} units vs. ${theoretical.toFixed(0)} theoretical (${pct.toFixed(1)}%).</strong><br>`;
+  html += `The line lost <span class="highlight">${loss.toFixed(0)} units</span> of throughput due to variance and dependency — no station was ever "broken."<br><br>`;
+  html += `<strong>${worst.name}</strong> is your effective constraint (avg ${worstAvg.toFixed(2)}/round). `;
+  html += `Idle rounds across all stations: <span class="highlight">${state.totalIdle}</span>. `;
+  html += `Capacity that is idle at a non-constraint is <em>not</em> a problem — capacity that is idle at the constraint is.`;
+
+  el.insight.innerHTML = html;
+}
+
+// =========================================================================
+// UI HELPERS
+// =========================================================================
+
+function setButtonsDisabled(disabled) {
+  el.btnStep.disabled = disabled;
+  el.btnFast.disabled = disabled;
+  el.btnReset.disabled = disabled;
+  el.stationCount.disabled = disabled;
+  el.bufferSize.disabled = disabled;
+  if (disabled) {
+    el.btnPlay.disabled = true;
+  } else {
+    el.btnPlay.disabled = false;
+  }
+}
+
+function refreshAll() {
+  initState();
+  buildLine();
+  renderBuffers();
+  renderStats();
+  renderStationStats();
+  renderStationBars();
+  drawChart();
+  updateInsight();
+}
+
+function stopAutoPlay() {
+  state.isRunning = false;
+  clearTimeout(state.playTimer);
+  el.btnPlay.textContent = '⏩ Auto-Play';
+  el.btnPlay.classList.remove('warn');
+}
+
+// =========================================================================
+// EVENT WIRING
+// =========================================================================
+
+el.btnStep.addEventListener('click', () => {
+  if (!state.isAnimating) runAnimatedRound();
+});
+
+el.btnPlay.addEventListener('click', () => {
+  if (state.isRunning) {
+    stopAutoPlay();
+    setButtonsDisabled(false);
+  } else {
+    state.isRunning = true;
+    el.btnPlay.textContent = '⏸ Pause';
+    el.btnPlay.classList.add('warn');
+    el.btnStep.disabled = true;
+    el.btnFast.disabled = true;
+
+    const loop = async () => {
+      if (!state.isRunning) return;
+      await runAnimatedRound();
+      if (!state.isRunning) return;
+      const delay = Math.max(50, 900 - state.speed * 80);
+      state.playTimer = setTimeout(loop, delay);
+    };
+    loop();
+  }
+});
+
+el.btnFast.addEventListener('click', () => {
+  if (state.isAnimating) return;
+  runFastRounds(100);
+});
+
+el.btnReset.addEventListener('click', () => {
+  stopAutoPlay();
+  state.isAnimating = false;
+  el.log.innerHTML = '';
+  refreshAll();
+  setButtonsDisabled(false);
+});
+
+el.stationCount.addEventListener('input', (e) => {
+  if (state.isAnimating) return;
+  const newVal = Math.max(MIN_STATIONS, parseInt(e.target.value, 10));
+  state.numStations = newVal;
+  el.stationCountVal.textContent = newVal;
+  stopAutoPlay();
+  refreshAll();
+});
+
+el.bufferSize.addEventListener('input', (e) => {
+  if (state.isAnimating) return;
+  state.startBuffer = parseInt(e.target.value, 10);
+  el.bufferSizeVal.textContent = state.startBuffer;
+  stopAutoPlay();
+  refreshAll();
+});
+
+el.speed.addEventListener('input', (e) => {
+  state.speed = parseInt(e.target.value, 10);
+  el.speedVal.textContent = state.speed;
+});
+
+window.addEventListener('resize', () => {
+  drawChart();
+});
+
+// =========================================================================
+// BOOT
+// =========================================================================
+
+function boot() {
+  refreshAll();
+
+  state.stations.forEach((st, i) => {
+    const dice = $('dice-' + i);
+    if (dice) {
+      const rot = FACE_ROTATIONS[1];
+      dice.style.transform = `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`;
+    }
+  });
+}
+
+boot();
+</script>
+</body>
+</html>
